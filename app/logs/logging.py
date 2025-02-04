@@ -4,7 +4,7 @@ import os
 from loguru import logger
 
 # Ensure logs directory exists
-LOG_DIR = "logs"
+LOG_DIR = "app/logs"
 LOG_FILE = os.path.join(LOG_DIR, "app.log")
 os.makedirs(LOG_DIR, exist_ok=True)  # Creates 'logs' folder if not exists
 

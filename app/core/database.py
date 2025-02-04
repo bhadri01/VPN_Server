@@ -3,11 +3,9 @@ from app.core.config import settings
 from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import String, DateTime, func
-from sqlalchemy.ext.declarative import as_declarative, declarative_base
+from sqlalchemy.ext.declarative import as_declarative
 from sqlalchemy.orm import mapped_column
 import uuid
-
-Base = declarative_base()
 
 @as_declarative()
 class Base:

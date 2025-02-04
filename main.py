@@ -14,7 +14,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 # route import
 from app.core.config import settings
-from app.core.database import Base, get_session,master_db_engine
+from app.core.database import Base, get_session, master_db_engine
 from app.logs.logging import logger
 # import expection handlers
 from app.utils.exception_handler import (authentication_error_handler,
@@ -32,6 +32,7 @@ from app.utils.exception_handler import (authentication_error_handler,
                                          validation_exception_handler,
                                          value_error_handler)
 
+from app.utils.httpbearer import get_current_user
 from app.utils.token_blacklist import cleanup_expired_tokens
 
 # Determine if running in production
@@ -72,6 +73,7 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 
+from app.api.users.routers import router as user_router
 
 
 async def start_periodic_cleanup():
@@ -91,8 +93,6 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
         logger.info('[*] FastAPI startup: Database connected')
 
-
-
     loop = asyncio.get_event_loop()
     loop.create_task(start_periodic_cleanup())
     logger.info('[*] FastAPI startup: Token thread started')
@@ -106,6 +106,8 @@ async def lifespan(app: FastAPI):
 
 app.router.lifespan_context = lifespan
 
+
+app.include_router(user_router, tags=["Users"], prefix="/api/users")
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True, reload_excludes=["logs/*"])

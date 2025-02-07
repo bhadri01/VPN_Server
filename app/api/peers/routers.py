@@ -35,5 +35,11 @@ async def add_peers(peer_id: str, current_user=Depends(get_current_user), db: As
 
 @router.put("/{peer_id}")
 async def edit_peers(peer_id : str , data : EditPeer , current_user=Depends(get_current_user), db: AsyncSession = Depends(get_session)):
-    result = await peer_service(db).edit_peer(peer_id,data,current_user)
+    result = await peer_service(db).update_peer(peer_id,data,current_user)
     return result
+
+@router.get("/generate-peer-config/{peer_id}")
+async def generate_peer_config(peer_id : str, db: AsyncSession = Depends(get_session)):
+    result = await peer_service(db).generate_peer_config(peer_id)
+    return result
+

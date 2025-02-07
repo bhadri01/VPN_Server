@@ -1,3 +1,4 @@
+from unittest import result
 from fastapi import APIRouter, Depends
 
 from app.api.users.models import User
@@ -32,4 +33,9 @@ async def create_user(
     current_user=Depends(get_current_user)
 ):
     result = await user_service(db).create_user(data, current_user)
+    return result
+
+@router.get("/me")
+async def get_user(db : AsyncSession = Depends(get_session),current_user = Depends(get_current_user)):
+    result = await user_service(db).get_user(current_user)
     return result

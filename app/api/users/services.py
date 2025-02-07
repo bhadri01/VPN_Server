@@ -1,6 +1,7 @@
 
 
 from datetime import timedelta
+from unittest import result
 from fastapi import HTTPException
 from sqlalchemy import select
 from app.api.users.models import AuditLog, User
@@ -69,3 +70,10 @@ class user_service:
     async def get_all_users(self):
         query = await self.db.execute(select(User))
         return query.scalars().all()
+
+    async def get_user(self, current_user):
+        query = await self.db.execute(select(User).where(User.username == current_user.username))
+        result = query.scalars().first()
+        if not result:
+            raise HTTPException(status_code=404, detail="User not found")
+        return result

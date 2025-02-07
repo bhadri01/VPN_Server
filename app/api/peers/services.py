@@ -9,6 +9,8 @@ from fastapi import HTTPException
 from httpx import get
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from websockets import serve
+from sqlalchemy.orm import joinedload
 
 from app.api.peers.models import WireGuardPeer
 from app.api.users.models import AuditLog
@@ -26,7 +28,6 @@ class peer_service:
                              action=action, target=target)
         db.add(log_entry)
         await db.commit()
-
 
     @staticmethod
     async def get_next_available_ip(db: AsyncSession, ip: str) -> str:
@@ -84,37 +85,38 @@ class peer_service:
             raise HTTPException(status_code=404, detail="Peer not found")
         return peer
 
-
-    async def add_peer(self, user_id,data, current_user):
-        assigned_ip = await self.get_next_available_ip(self.db,data.ip)
+    async def add_peer(self, user_id, data, current_user):
+        assigned_ip = await self.get_next_available_ip(self.db, data.ip)
         private_key, public_key = self.generate_wg_key_pair()
 
         new_peer = WireGuardPeer(user_id=user_id, peer_name=data.peer_name,
-                                 public_key=public_key, assigned_ip=assigned_ip)
+                                 public_key=public_key,private_key=private_key, assigned_ip=assigned_ip,
+                                 server_id=data.server_id)
 
 
-        command = f"wg set wg0 peer {public_key} allowed-ips {assigned_ip}/32"
+        self.db.add(new_peer)
+
+        query = await self.db.execute(select(WireGuardPeer).where(WireGuardPeer.user_id == user_id).options(joinedload(WireGuardPeer.wg_server)))
+        result = query.scalars().first()
+
+        # Log action in the database
+        command = f"wg set {result.wg_server.server_name} peer {public_key} allowed-ips {assigned_ip}/32"
         process = await asyncio.create_subprocess_shell(command)
         await process.communicate()  # Ensure command execution completes
-        
+
         command = f"wg-quick save wg0"
         process = await asyncio.create_subprocess_shell(command)
         await process.communicate()
 
-        self.db.add(new_peer)
-        # Log action in the database
         await self.log_action(current_user.username, "Added peer", data.peer_name, self.db)
 
         return {"message": "Peer Created Successfully"}
 
-
-
-
     async def remove_peer(self, peer_id, current_user):
         peer = await self.db.execute(select(WireGuardPeer).where(WireGuardPeer.id == peer_id))
         result = peer.scalars().first()
-        
-        print("None",result)
+
+        print("None", result)
 
         if result == None:
             raise HTTPException(
@@ -133,7 +135,7 @@ class peer_service:
         await self.db.delete(result)
         await self.log_action(current_user.username, "Removed peer", result.peer_name, self.db)
         return {"message": f"Peer {result.peer_name} removed successfully"}
-    
+
     async def update_peer(self, peer_id, data, current_user):
         async with self.db.begin():
             peer = await self.db.execute(select(WireGuardPeer).where(WireGuardPeer.id == peer_id))
@@ -155,29 +157,27 @@ class peer_service:
             await self.log_action(current_user.username, "Updated peer", result.peer_name, self.db)
 
         return {"message": f"Peer {result.peer_name} updated successfully"}
-    
-    async def generate_peer_config(self,peer_id, username, public_key, assigned_ip):
-        query = await self.db.execute(select(WireGuardPeer).where(WireGuardPeer.id == peer_id))
+
+    async def generate_peer_config(self, peer_id, current_user):
+        query = await self.db.execute(select(WireGuardPeer).where(WireGuardPeer.id == peer_id).options(joinedload(WireGuardPeer.wg_server)))
         result = query.scalars().first()
         if not result:
             raise HTTPException(status_code=404, detail="Peer not found")
 
-        with open("/etc/wireguard/keys/server_public.key", "r") as spkf:
-            server_public_key = spkf.read().strip()
-        
+
         config = f"""
 [Interface]
 PrivateKey = {result.private_key}
 Address = {result.assigned_ip}/24
 
 [Peer]
-PublicKey = {server_public_key}
+PublicKey = {result.wg_server.public_key}
 Endpoint = {os.getenv("ENDPOINT")}:{os.getenv("SERVER_PORT")}
 AllowedIPs = {os.getenv("ALLOWED_IPS")}
 PersistentKeepalive = 30
 """
-        CONFIG_DIR = "/peers"  # Define your config directory path
-        filename = f"{CONFIG_DIR}/{username}.conf"
+        CONFIG_DIR = "/home"  # Define your config directory path
+        filename = f"{CONFIG_DIR}/{current_user.username}.conf"
         os.makedirs(CONFIG_DIR, exist_ok=True)
         async with aiofiles.open(filename, "w") as f:
             await f.write(config)

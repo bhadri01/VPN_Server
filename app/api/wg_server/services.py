@@ -1,5 +1,6 @@
 
 
+import asyncio
 import os
 import subprocess
 from typing import Tuple
@@ -52,6 +53,7 @@ class wg_server:
                 f"Error writing to wg0.conf: {str(e)}"
                     )  
         
+        
     async def get_servers(self):
         query = await self.db.execute(select(WGServerConfig))
         servers = query.scalars().all()
@@ -70,6 +72,11 @@ class wg_server:
             **data.model_dump(), public_key=public_key, private_key=private_key)
         self.db.add(server)
         await self.db.commit()
+
+        command = f"wg syncconf {data.server_name} <(wg-quick strip {data.server_name})"
+        process = await asyncio.create_subprocess_shell(command)
+        await process.communicate()
+        
         return {"message": "Server Created Successfully"}
     
     async def delete_server(self, server_id):
@@ -88,5 +95,9 @@ class wg_server:
         # Delete the server entry from the database
         await self.db.delete(server)
         await self.db.commit()
+
+        command = f"wg syncconf {server.server_name} <(wg-quick strip {server.server_name})"
+        process = await asyncio.create_subprocess_shell(command)
+        await process.communicate()
 
         return {"message": "Server Deleted Successfully"}

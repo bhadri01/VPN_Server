@@ -38,8 +38,8 @@ async def edit_peers(peer_id : str , data : EditPeer , current_user=Depends(get_
     result = await peer_service(db).update_peer(peer_id,data,current_user)
     return result
 
-@router.get("/generate-peer-config/{peer_id}")
-async def generate_peer_config(peer_id : str, db: AsyncSession = Depends(get_session)):
-    result = await peer_service(db).generate_peer_config(peer_id)
+@router.post("/generate-peer-config/{peer_id}")
+async def generate_peer_config(peer_id : str ,  db: AsyncSession = Depends(get_session),current_user=Depends(get_current_user)):
+    result = await peer_service(db).generate_peer_config(peer_id,current_user)
     return result
 

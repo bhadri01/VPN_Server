@@ -48,12 +48,14 @@ class wg_server:
                     f"PostDown = iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth+ -j MASQUERADE\n"
                     f"ListenPort = {data.listen_port}\nPrivateKey = {private_key}\n"
                 )
+
+                os.system(f"wg-quick up {data.server_name}")
+
         except IOError as e:
             raise RuntimeError(
                 f"Error writing to wg0.conf: {str(e)}"
-                    )  
-        
-        
+            )
+
     async def get_servers(self):
         query = await self.db.execute(select(WGServerConfig))
         servers = query.scalars().all()
@@ -64,10 +66,10 @@ class wg_server:
         if server is None:
             raise HTTPException(status_code=404, detail="Server not found")
         return server
-        
+
     async def create_server(self, data):
         private_key, public_key = self.generate_wg_key_pair()
-        self.add_keys_to_wg0_conf(private_key,data)
+        self.add_keys_to_wg0_conf(private_key, data)
         server = WGServerConfig(
             **data.model_dump(), public_key=public_key, private_key=private_key)
         self.db.add(server)
@@ -76,16 +78,16 @@ class wg_server:
         command = f"wg syncconf {data.server_name} <(wg-quick strip {data.server_name})"
         process = await asyncio.create_subprocess_shell(command)
         await process.communicate()
-        
+
         return {"message": "Server Created Successfully"}
-    
+
     async def delete_server(self, server_id):
         server = await self.db.get(WGServerConfig, server_id)
         if server is None:
             raise HTTPException(status_code=404, detail="Server not found")
-        
 
         # Attempt to delete the server configuration file
+        os.system(f"wg-quick down {server.server_name}")
         wg0_conf_path = f"/etc/wireguard/{server.server_name}.conf"
         try:
             os.remove(wg0_conf_path)

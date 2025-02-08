@@ -96,6 +96,7 @@ class peer_service:
 
         self.db.add(new_peer)
 
+
         query = await self.db.execute(select(WireGuardPeer).where(WireGuardPeer.user_id == user_id).options(joinedload(WireGuardPeer.wg_server)))
         result = query.scalars().first()
 
@@ -176,9 +177,10 @@ Endpoint = {os.getenv("ENDPOINT")}:{os.getenv("SERVER_PORT")}
 AllowedIPs = {os.getenv("ALLOWED_IPS")}
 PersistentKeepalive = 30
 """
-        CONFIG_DIR = "/home"  # Define your config directory path
-        filename = f"{CONFIG_DIR}/{current_user.username}.conf"
-        os.makedirs(CONFIG_DIR, exist_ok=True)
-        async with aiofiles.open(filename, "w") as f:
-            await f.write(config)
-        return filename
+        # CONFIG_DIR = "/home"  # Define your config directory path
+        # filename = f"{CONFIG_DIR}/{current_user.username}.conf"
+        # os.makedirs(CONFIG_DIR, exist_ok=True)
+        # async with aiofiles.open(filename, "w") as f:
+        #     await f.write(config)
+
+        return config

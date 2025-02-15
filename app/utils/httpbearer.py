@@ -25,9 +25,7 @@ async def get_current_user(
     except jwt.JWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
-    print(payload)
     username: str = payload.get("username")
-    print(username)
     if username is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 

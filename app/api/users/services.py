@@ -24,7 +24,6 @@ class user_service:
 
     @staticmethod
     def is_admin(user: User):
-        print(user)
         if user.role != "admin":
             raise HTTPException(
                 status_code=403, detail="Admin access required")

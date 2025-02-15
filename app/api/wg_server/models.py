@@ -1,10 +1,13 @@
 from asyncio import events
 from operator import add
+import os
 import subprocess
 from typing import Tuple
-from sqlalchemy import CheckConstraint, Column, ForeignKey, Integer, String
+from sqlalchemy import CheckConstraint, Column, ForeignKey, Integer, String, event
 from app.core.database import Base
 from sqlalchemy.orm import relationship
+from app.logs.logging import logger
+
 
 def generate_wg_key_pair() -> Tuple[str, str]:
     """Generates a WireGuard key pair (private key & public key)"""
@@ -38,12 +41,54 @@ class WGServerConfig(Base):
     )
 
 
-# def create_default_server(target, connection, **kwargs):
-#     connection.execute(
-#             WGServerConfig.__table__.insert().values(
-#                 server_name="wg-server-default",
-#                 address="10.0.0.1",
-#                 listen_port=51820,
-#                 private_key=
-#             )
-#         )
+private_key, public_key = generate_wg_key_pair()
+
+
+import os
+
+def create_default_server(target, connection, **kwargs):
+    # Extract required parameters from kwargs
+    server_name = kwargs.get("server_name", "wg-server-default")
+    address = kwargs.get("address", "10.0.0.1/16")
+    listen_port = kwargs.get("listen_port", 51820)
+    private_key = kwargs.get("private_key")
+    public_key = kwargs.get("public_key")
+    wg0_conf_path = "/etc/wireguard/wg1.conf"  # Make sure this path is correct
+
+    if not private_key or not public_key:
+        raise ValueError("Private key and public key must be provided.")
+
+    # Append configuration to WireGuard config file
+    with open(wg0_conf_path, "a") as wg0_conf:
+        wg0_conf.write(
+            f"\n[Interface]\nAddress = {address}\nSaveConfig = True\n"
+            f"PostUp = iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; "
+            f"iptables -t nat -A POSTROUTING -o eth+ -j MASQUERADE\n"
+            f"PostDown = iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; "
+            f"iptables -t nat -D POSTROUTING -o eth+ -j MASQUERADE\n"
+            f"ListenPort = {listen_port}\nPrivateKey = {private_key}\n"
+        )
+
+    # Start the WireGuard server
+    os.system(f"wg-quick up {server_name}")
+
+    # Store configuration in the database
+    connection.execute(
+        WGServerConfig.__table__.insert().values(
+            server_name=server_name,
+            address=address,
+            listen_port=listen_port,
+            private_key=private_key,
+            public_key=public_key
+        )
+    )
+
+    logger.log(f"WireGuard server '{server_name}' created successfully!")
+
+
+
+event.listen(
+    WGServerConfig.__table__, 
+    "after_create", 
+    lambda target, connection, **kwargs: create_default_server(target, connection, private_key=private_key, public_key=public_key)
+)

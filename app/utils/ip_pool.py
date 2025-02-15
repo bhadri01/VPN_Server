@@ -1,12 +1,13 @@
+from app.logs.logging import logger
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from ipaddress import IPv4Network
 
-from app.api.peers.models import WireGuardIPPool
 
 
 async def populate_ip_pool(db: AsyncSession, subnet: str = "10.0.0.0/24"):
+    from app.api.peers.models import WireGuardIPPool
     """Populate the database with all available IPs from the subnet."""
 
     # Exclude the first IP (e.g., 10.8.0.1) as it's usually the gateway
@@ -18,10 +19,14 @@ async def populate_ip_pool(db: AsyncSession, subnet: str = "10.0.0.0/24"):
         if not result.scalars().first():
             db.add(WireGuardIPPool(ip_address=ip, is_assigned=False))
 
+    logger.info("IP Pool populated")
+
     await db.commit()
 
 
 async def get_next_available_ip(db: AsyncSession) -> str:
+    from app.api.peers.models import WireGuardIPPool
+
     """Retrieve the next unassigned IP from the database."""
 
     result = await db.execute(
@@ -42,6 +47,8 @@ async def get_next_available_ip(db: AsyncSession) -> str:
 
 
 async def release_ip(db: AsyncSession, ip: str):
+    from app.api.peers.models import WireGuardIPPool
+
     """Mark an IP as available when a peer is deleted."""
     result = await db.execute(
         select(WireGuardIPPool).where(WireGuardIPPool.ip_address == ip)

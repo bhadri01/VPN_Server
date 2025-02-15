@@ -66,7 +66,7 @@ class peer_service:
         return peer
 
     async def add_peer(self, user_id, data, current_user):
-        assigned_ip = await get_next_available_ip(self.db)
+        assigned_ip = await get_next_available_ip(self.db,data.ip)
         private_key, public_key = self.generate_wg_key_pair()
 
         new_peer = WireGuardPeer(

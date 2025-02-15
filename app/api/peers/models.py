@@ -1,7 +1,8 @@
 from functools import partial
 import os
 from httpx import get
-from sqlalchemy import Boolean, Column, ForeignKey, String,event
+from sqlalchemy import Boolean, Column, ForeignKey, String,event   
+from sqlalchemy.orm import relationship
 from app.core.database import Base, get_session
 from app.utils.ip_pool import populate_ip_pool
 import asyncio
@@ -15,6 +16,8 @@ class WireGuardPeer(Base):
     public_key = Column(String, unique=True, index=True)
     private_key = Column(String, unique=True, index=True)
     assigned_ip = Column(String, unique=True, index=True)
+    
+    wg_server = relationship("WGServerConfig", back_populates="peers")
 
 
 class WireGuardIPPool(Base):

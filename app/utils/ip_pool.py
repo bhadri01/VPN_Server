@@ -1,6 +1,6 @@
 from app.logs.logging import logger
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from ipaddress import IPv4Network
 
@@ -24,27 +24,39 @@ async def populate_ip_pool(db: AsyncSession, subnet: str):
     await db.commit()
 
 
-async def get_next_available_ip(db: AsyncSession) -> str:
+async def get_next_available_ip(db: AsyncSession, ip: str = None) -> str:
     from app.api.peers.models import WireGuardIPPool
 
-    """Retrieve the next unassigned IP from the database."""
+    """Retrieve a specific unassigned IP if provided, otherwise get the next available IP."""
 
-    result = await db.execute(
-        select(WireGuardIPPool).where(
-            WireGuardIPPool.is_assigned == False).limit(1)
+    if ip:
+        # Check if the provided IP is available
+        result = await db.execute(
+            select(WireGuardIPPool).where(
+                WireGuardIPPool.ip_address == ip, 
+                WireGuardIPPool.is_assigned == False
+            ).limit(1).with_for_update()
+        )
+    else:
+        # Select the next available IP
+        result = await db.execute(
+            select(WireGuardIPPool).where(
+                WireGuardIPPool.is_assigned == False
+            ).limit(1).with_for_update()
+        )
+    available_ip = result.scalars().first()
+    if not available_ip:
+        raise HTTPException(status_code=400, detail="No available IPs left or provided IP is already assigned")
+    # Mark the IP as assigned
+    await db.execute(
+        update(WireGuardIPPool)
+        .where(WireGuardIPPool.ip_address == available_ip.ip_address)
+        .values(is_assigned=True)
     )
 
-    available_ip = result.scalars().first()
-
-    if not available_ip:
-        raise HTTPException(status_code=400, detail="No available IPs left")
-
-    # Mark the IP as assigned
-    available_ip.is_assigned = True
-    await db.commit()
+    await db.commit()  # Ensure the change is committed
 
     return available_ip.ip_address
-
 
 async def release_ip(db: AsyncSession, ip: str):
     from app.api.peers.models import WireGuardIPPool

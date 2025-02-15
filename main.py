@@ -1,12 +1,14 @@
+from app.api.wg_server.routers import router as wg_router
+from app.api.peers.routers import router as peer_router
+from app.api.users.routers import router as user_router
 import asyncio
 from contextlib import asynccontextmanager
 from datetime import datetime
 
 import uvicorn
-from fastapi import Depends, FastAPI
+from fastapi import FastAPI
 from fastapi.exceptions import HTTPException, RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import (DataError, IntegrityError, InterfaceError,
                             OperationalError, ProgrammingError,
                             SQLAlchemyError)
@@ -14,7 +16,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 # route import
 from app.core.config import settings
-from app.core.database import Base, get_session, master_db_engine
+from app.core.database import Base, master_db_engine
 from app.logs.logging import logger
 # import expection handlers
 from app.utils.exception_handler import (authentication_error_handler,
@@ -32,7 +34,6 @@ from app.utils.exception_handler import (authentication_error_handler,
                                          validation_exception_handler,
                                          value_error_handler)
 
-from app.utils.httpbearer import get_current_user
 from app.utils.token_blacklist import cleanup_expired_tokens
 
 # Determine if running in production
@@ -73,10 +74,6 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 
-from app.api.users.routers import router as user_router
-from app.api.peers.routers import router as peer_router
-from app.api.wg_server.routers import router as wg_router
-
 
 async def start_periodic_cleanup():
     while True:
@@ -110,8 +107,9 @@ app.router.lifespan_context = lifespan
 
 
 app.include_router(user_router, tags=["Users"], prefix="/api/users")
-app.include_router(peer_router,tags=["Peers"],prefix="/api/peers")
+app.include_router(peer_router, tags=["Peers"], prefix="/api/peers")
 app.include_router(wg_router, tags=["WireGuard"], prefix="/api/wg_server")
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True, reload_excludes=["logs/*"])
+    uvicorn.run("main:app", host="0.0.0.0", port=8000,
+                reload=True, reload_excludes=["logs/*"])

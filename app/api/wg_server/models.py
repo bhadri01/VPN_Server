@@ -31,6 +31,7 @@ class WGServerConfig(Base):
 
     entry = Column(Integer, default=1, nullable=False, unique=True)
     server_name = Column(String(100), unique=True, nullable=False)
+    interface_name = Column(String(100), unique=True, nullable=False)
     address = Column(String(100), unique=True, nullable=False)
     listen_port = Column(Integer, unique=True, nullable=False)
     private_key = Column(String(100), unique=True, nullable=False)
@@ -44,15 +45,13 @@ class WGServerConfig(Base):
 private_key, public_key = generate_wg_key_pair()
 
 
-import os
-
 def create_default_server(target, connection, **kwargs):
     # Extract required parameters from kwargs
     server_name = kwargs.get("server_name", "wg-server-default")
     address = kwargs.get("address", "10.0.0.1/16")
     listen_port = kwargs.get("listen_port", 51820)
-    private_key = kwargs.get("private_key")
-    public_key = kwargs.get("public_key")
+    private_key = kwargs.get("private_key", "")
+    public_key = kwargs.get("public_key", "")
     wg0_conf_path = "/etc/wireguard/wg1.conf"  # Make sure this path is correct
 
     if not private_key or not public_key:
@@ -76,6 +75,7 @@ def create_default_server(target, connection, **kwargs):
     connection.execute(
         WGServerConfig.__table__.insert().values(
             server_name=server_name,
+            interface_name="wg1",
             address=address,
             listen_port=listen_port,
             private_key=private_key,
@@ -83,12 +83,12 @@ def create_default_server(target, connection, **kwargs):
         )
     )
 
-    logger.log(f"WireGuard server '{server_name}' created successfully!")
-
+    logger.info(f"WireGuard server '{server_name}' created successfully!")
 
 
 event.listen(
-    WGServerConfig.__table__, 
-    "after_create", 
-    lambda target, connection, **kwargs: create_default_server(target, connection, private_key=private_key, public_key=public_key)
+    WGServerConfig.__table__,
+    "after_create",
+    lambda target, connection, **kwargs: create_default_server(
+        target, connection, private_key=private_key, public_key=public_key,address="10.11.0.1/16")
 )

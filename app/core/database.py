@@ -7,6 +7,7 @@ from sqlalchemy.ext.declarative import as_declarative
 from sqlalchemy.orm import mapped_column
 import uuid
 
+
 @as_declarative()
 class Base:
     """
@@ -22,7 +23,6 @@ class Base:
     updated_by = mapped_column(String, nullable=True)  # Track the updater
 
 
-
 def create_engine(url, **kwargs):
     """Create an asynchronous SQLAlchemy engine."""
     return create_async_engine(url, echo=False, **kwargs)
@@ -32,7 +32,7 @@ master_db_engine = create_engine(settings.postgresql_database_url)
 
 # Async session factories
 async_master_session = async_sessionmaker(
-    bind=master_db_engine, autocommit=False, autoflush=False,class_=AsyncSession)
+    bind=master_db_engine, autocommit=False, expire_on_commit=False, autoflush=False, class_=AsyncSession)
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
@@ -41,4 +41,3 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
     """
     async with async_master_session() as session:
         yield session
-

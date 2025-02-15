@@ -14,6 +14,7 @@ from sqlalchemy.orm import joinedload
 
 from app.api.peers.models import WireGuardPeer
 from app.api.users.models import AuditLog
+from app.api.wg_server.models import WGServerConfig
 
 WIREGUARD_SUBNET = "10.0.0.0/24"
 
@@ -38,7 +39,6 @@ class peer_service:
         # Convert to set for fast lookup
         assigned_ips = {row for row in result.scalars().all()}
 
-        print("Currently Assigned IPs:", assigned_ips)  # Debugging output
         if ip in assigned_ips:
             raise HTTPException(
                 status_code=400, detail=f"IP {ip} is already assigned")
@@ -89,23 +89,31 @@ class peer_service:
         assigned_ip = await self.get_next_available_ip(self.db, data.ip)
         private_key, public_key = self.generate_wg_key_pair()
 
-        new_peer = WireGuardPeer(user_id=user_id, peer_name=data.peer_name,
-                                 public_key=public_key,private_key=private_key, assigned_ip=assigned_ip,
-                                )
-
+        new_peer = WireGuardPeer(
+            user_id=user_id,
+            peer_name=data.peer_name,
+            public_key=public_key,
+            private_key=private_key,
+            assigned_ip=assigned_ip,
+        )
 
         self.db.add(new_peer)
+        await self.db.commit()  # Ensure commit is awaited
 
-
-        query = await self.db.execute(select(WireGuardPeer).where(WireGuardPeer.user_id == user_id).options(joinedload(WireGuardPeer.wg_server)))
+        # Fetch the WireGuard server config
+        query = await self.db.execute(select(WGServerConfig))
         result = query.scalars().first()
 
+        if result is None:
+            raise HTTPException(
+                status_code=404, detail="WireGuard server config not found")
+
         # Log action in the database
-        command = f"wg set {result.wg_server.server_name} peer {public_key} allowed-ips {assigned_ip}/32"
+        command = f"wg set {result.interface_name} peer {public_key} allowed-ips {assigned_ip}/32"
         process = await asyncio.create_subprocess_shell(command)
         await process.communicate()  # Ensure command execution completes
 
-        command = f"wg-quick save wg0"
+        command = f"wg-quick save {result.interface_name}"
         process = await asyncio.create_subprocess_shell(command)
         await process.communicate()
 
@@ -116,8 +124,6 @@ class peer_service:
     async def remove_peer(self, peer_id, current_user):
         peer = await self.db.execute(select(WireGuardPeer).where(WireGuardPeer.id == peer_id))
         result = peer.scalars().first()
-
-        print("None", result)
 
         if result == None:
             raise HTTPException(
@@ -164,7 +170,6 @@ class peer_service:
         result = query.scalars().first()
         if not result:
             raise HTTPException(status_code=404, detail="Peer not found")
-
 
         config = f"""
 [Interface]

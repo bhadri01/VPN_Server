@@ -33,7 +33,6 @@ async def database_exception_handler(request: Request, exc: SQLAlchemyError):
 # Handles unique constraint violations (e.g., duplicate key)
 async def integrity_error_handler(request: Request, exc: IntegrityError):
     logger.warning(f"Database Integrity Error on {request.url}: {exc}")
-    print(f"Database Integrity Error on {request.url}: {exc}")
     return JSONResponse(
         status_code=409,
         content={"detail": "A conflict occurred. This record may already exist."}

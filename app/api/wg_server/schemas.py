@@ -13,7 +13,7 @@ class WGServerSchema(BaseModel):
 
 
     class Config:
-        orm_mode = True
+        from_attributes = True
         from_attributes = True
 
 class WGServerResponseSchema(BaseModel):
@@ -30,7 +30,7 @@ class WGServerResponseSchema(BaseModel):
     # public_key : str
 
     class Config:
-        orm_mode = True
+        from_attributes = True
     
     def model_validate(cls, obj):
         obj.private_key = verify_password(obj.private_key)

@@ -15,8 +15,9 @@ from sqlalchemy.orm import joinedload
 from app.api.peers.models import WireGuardPeer
 from app.api.users.models import AuditLog
 from app.api.wg_server.models import WGServerConfig
+from app.utils.ip_pool import get_next_available_ip
 
-WIREGUARD_SUBNET = "10.0.0.0/24"
+
 
 
 class peer_service:
@@ -30,27 +31,6 @@ class peer_service:
         db.add(log_entry)
         await db.commit()
 
-    @staticmethod
-    async def get_next_available_ip(db: AsyncSession, ip: str) -> str:
-        """Find the next available IP in the WireGuard subnet, starting from 10.8.0.2."""
-
-        # Query database for existing assigned IPs
-        result = await db.execute(select(WireGuardPeer.assigned_ip))
-        # Convert to set for fast lookup
-        assigned_ips = {row for row in result.scalars().all()}
-
-        if ip in assigned_ips:
-            raise HTTPException(
-                status_code=400, detail=f"IP {ip} is already assigned")
-        # Iterate through IPs in the range (skipping 10.8.0.1)
-        for i in range(2, 255):  # 10.8.0.2 - 10.8.0.254
-            ip = f"10.0.0.{i}"  # Corrected to use the subnet 10.8.0.x
-            if ip not in assigned_ips:
-                return ip  # ✅ Return first available sequential IP
-
-        # If no available IP is found, raise HTTPException after completing the loop
-        raise HTTPException(
-            status_code=400, detail="No available IP addresses left")
 
     @staticmethod
     def generate_wg_key_pair() -> Tuple[str, str]:
@@ -86,7 +66,7 @@ class peer_service:
         return peer
 
     async def add_peer(self, user_id, data, current_user):
-        assigned_ip = await self.get_next_available_ip(self.db, data.ip)
+        assigned_ip = await get_next_available_ip(self.db)
         private_key, public_key = self.generate_wg_key_pair()
 
         new_peer = WireGuardPeer(

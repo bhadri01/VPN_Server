@@ -16,7 +16,8 @@ class WireGuardPeer(Base):
     public_key = Column(String, unique=True, index=True)
     private_key = Column(String, unique=True, index=True)
     assigned_ip = Column(String, unique=True, index=True)
-    
+    server_id = Column(String, ForeignKey("wg_server_config.id"))
+
     wg_server = relationship("WGServerConfig", back_populates="peers")
 
 

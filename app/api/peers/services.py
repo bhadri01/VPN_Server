@@ -75,6 +75,7 @@ class peer_service:
             public_key=public_key,
             private_key=private_key,
             assigned_ip=assigned_ip,
+            server_id=data.server_id
         )
 
         self.db.add(new_peer)

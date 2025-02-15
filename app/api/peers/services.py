@@ -125,24 +125,19 @@ class peer_service:
         return {"message": f"Peer {result.peer_name} removed successfully"}
 
     async def update_peer(self, peer_id, data, current_user):
-        async with self.db.begin():
-            peer = await self.db.execute(select(WireGuardPeer).where(WireGuardPeer.id == peer_id))
-            result = peer.scalars().first()
-
-            if result is None:
-                raise HTTPException(
-                    detail="Peer Not Found",
-                    status_code=404
-                )
-
-            if data.peer_name:
-                result.peer_name = data.peer_name
-
-            if data.ip:
-                result.assigned_ip = data.ip
-
-            await self.db.commit()
-            await self.log_action(current_user.username, "Updated peer", result.peer_name, self.db)
+        peer = await self.db.execute(select(WireGuardPeer).where(WireGuardPeer.id == peer_id))
+        result = peer.scalars().first()
+        if result is None:
+            raise HTTPException(
+                detail="Peer Not Found",
+                status_code=404
+            )
+        if data.peer_name:
+            result.peer_name = data.peer_name
+        if data.ip:
+            result.assigned_ip = data.ip
+        await self.db.commit()
+        await self.log_action(current_user.username, "Updated peer", result.peer_name, self.db)
 
         return {"message": f"Peer {result.peer_name} updated successfully"}
 

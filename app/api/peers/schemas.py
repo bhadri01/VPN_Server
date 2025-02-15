@@ -13,5 +13,5 @@ class DeletePeer(BaseModel):
     
     
 class EditPeer(BaseModel):
-    ip : str
-    peer_name : str
+    ip : Optional[str] = None
+    peer_name : Optional[str] = None

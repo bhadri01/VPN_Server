@@ -6,7 +6,7 @@ from ipaddress import IPv4Network
 
 
 
-async def populate_ip_pool(db: AsyncSession, subnet: str = "10.0.0.0/24"):
+async def populate_ip_pool(db: AsyncSession, subnet: str):
     from app.api.peers.models import WireGuardIPPool
     """Populate the database with all available IPs from the subnet."""
 

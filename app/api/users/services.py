@@ -71,6 +71,15 @@ class user_service:
         query = await self.db.execute(select(User))
         return query.scalars().all()
 
+    async def get_user_peers_count(self, username: str):
+        user = await self.authenticate_user(username, self.db)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Assuming there is a relationship defined in the User model to get peers
+        peers_count = len(user.peers)  # Replace 'peers' with the actual relationship attribute
+        return {"username": username, "peers_count": peers_count}
+
     async def get_user(self, current_user):
         query = await self.db.execute(select(User).where(User.username == current_user.username))
         result = query.scalars().first()

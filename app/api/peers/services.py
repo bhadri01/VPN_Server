@@ -91,7 +91,7 @@ class peer_service:
 
         new_peer = WireGuardPeer(user_id=user_id, peer_name=data.peer_name,
                                  public_key=public_key,private_key=private_key, assigned_ip=assigned_ip,
-                                 server_id=data.server_id)
+                                )
 
 
         self.db.add(new_peer)

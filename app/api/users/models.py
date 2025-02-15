@@ -3,7 +3,7 @@ from sqlalchemy import TIMESTAMP, Column, Integer, String,event, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import Base,master_db_engine
 from app.utils.password_utils import get_password_hash
-
+from sqlalchemy.orm import relationship
 
 class User(Base):
     __tablename__ = "users"

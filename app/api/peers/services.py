@@ -51,9 +51,9 @@ class peer_service:
             # Handle subprocess errors (e.g., if WireGuard tools are missing)
             raise RuntimeError(
                 f"Error generating WireGuard keys: {e.stderr.decode().strip()}")
-
-    async def get_all_peers(self):
-        query = await self.db.execute(select(WireGuardPeer))
+        
+    async def get_all_peers(self, user_id):
+        query = await self.db.execute(select(WireGuardPeer).where(WireGuardPeer.user_id == user_id))
         result = query.scalars().all()
         return result
 

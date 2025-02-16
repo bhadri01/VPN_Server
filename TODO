@@ -8,7 +8,7 @@ peer count for all Users API
 
 Total user should be only shown to admin role
 
-** show only logged in user's peers
+show only logged in user's peers
 
 ** RX , TX and IO Data for each peer
 

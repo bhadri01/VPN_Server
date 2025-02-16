@@ -13,13 +13,13 @@ router = APIRouter()
 
 
 @router.get("")
-async def get_peers(db: AsyncSession = Depends(get_session)):
-    result = await peer_service(db).get_all_peers()
+async def get_peers(db: AsyncSession = Depends(get_session), current_user=Depends(get_current_user)):
+    result = await peer_service(db).get_all_peers(current_user.id)
     return result
 
 
 @router.get("/{peer_id}")
-async def get_single_peer(peer_id: str, db: AsyncSession = Depends(get_session)):
+async def get_single_peer(peer_id: str, db: AsyncSession = Depends(get_session), current_user=Depends(get_current_user)):
     result = await peer_service(db).get_peer(peer_id)
     return result
 

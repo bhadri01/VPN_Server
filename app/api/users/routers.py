@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends
 
 from app.api.peers.services import peer_service
 from app.api.users.models import User
-from app.api.users.schemas import CreateUserRequest, UserLoginSchema, UserResponse
+from app.api.users.schemas import CreateUserRequest, EditUserRequest, UserLoginSchema, UserResponse
 from app.api.users.services import user_service
 from app.core.database import get_session
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,5 +47,12 @@ async def get_user(db : AsyncSession = Depends(get_session),current_user = Depen
     result = await user_service(db).get_user(current_user)
     return result
 
+@router.delete("/{user_id}")
+async def delete_user(user_id : str, db : AsyncSession = Depends(get_session),current_user = Depends(get_current_user)):
+    result = await user_service(db).delete_user(user_id, current_user)
+    return result
 
-
+@router.put("/{user_id}")
+async def edit_user(user_id : str, data : EditUserRequest, db : AsyncSession = Depends(get_session),current_user = Depends(get_current_user)):
+    result = await user_service(db).edit_user(user_id, data, current_user)
+    return result

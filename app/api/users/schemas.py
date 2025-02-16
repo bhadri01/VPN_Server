@@ -28,3 +28,8 @@ class UserResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class EditUserRequest(BaseModel):
+    username: Optional[str] = None
+    password : Optional[str] = None
+    role_id: Optional[str] = None

@@ -69,13 +69,17 @@ class peer_service:
         assigned_ip = await get_next_available_ip(self.db,data.ip)
         private_key, public_key = self.generate_wg_key_pair()
 
+
+        server = await self.db.execute(select(WGServerConfig))
+        server = server.scalars().first()
+
         new_peer = WireGuardPeer(
             user_id=user_id,
             peer_name=data.peer_name,
             public_key=public_key,
             private_key=private_key,
             assigned_ip=assigned_ip,
-            server_id=data.server_id
+            server_id=server.id
         )
 
         self.db.add(new_peer)

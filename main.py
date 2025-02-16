@@ -3,6 +3,7 @@ from app.api.users.models import create_default_user
 from app.api.wg_server.routers import router as wg_router
 from app.api.peers.routers import router as peer_router
 from app.api.users.routers import router as user_router
+from app.api.roles.routers import router as role_router
 import asyncio
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -100,10 +101,6 @@ async def lifespan(app: FastAPI):
     await create_default_user()
 
 
-    # async for session in get_session():  # ✅ Properly retrieve session
-    #     await populate_ip_pool(session, str(os.getenv("ALLOWED_IPS")))
-    #     break  # ✅ Ensure only one session is used  
-      
     loop = asyncio.get_event_loop()
     loop.create_task(start_periodic_cleanup())
     logger.info('[*] FastAPI startup: Token thread started')
@@ -121,6 +118,9 @@ app.router.lifespan_context = lifespan
 app.include_router(user_router, tags=["Users"], prefix="/api/users")
 app.include_router(peer_router, tags=["Peers"], prefix="/api/peers")
 app.include_router(wg_router, tags=["WireGuard"], prefix="/api/wg_server")
+
+app.include_router(role_router, tags=["Role"], prefix="/api/roles")
+
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000,

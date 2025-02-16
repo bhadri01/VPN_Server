@@ -7,6 +7,7 @@ from sqlalchemy import select
 from app.api.users.models import AuditLog, User
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.wg_server.models import WGServerConfig
 from app.core.database import get_session
 from app.utils.password_utils import get_password_hash, verify_password
 from app.utils.security import TOKEN_EXPIRE_MINUTES, create_access_token
@@ -75,6 +76,7 @@ class user_service:
         #Check if user already exists (use `await self.db.execute()`)
         result = await self.db.execute(select(User).where(User.username == data.username))
         existing_user = result.scalars().first()
+
         if existing_user:
             raise HTTPException(status_code=400, detail="User already exists")
         # Hash the password (ensure it's sync-safe)
@@ -109,6 +111,32 @@ class user_service:
             raise HTTPException(status_code=404, detail="User not found")
         return result
     
-    # async def delete_user(self,current_user):
-    #     await self.is_admin(current_user)
-    #     query = await self.db.execute(select(User).where(User.username == current_user))
+    async def delete_user(self,user_id, current_user):
+        await self.is_admin(current_user)
+        query = await self.db.execute(select(User).where(User.id == user_id))
+        result = query.scalars().first()
+
+        if not result:
+            raise HTTPException(status_code=404, detail="User not found")
+        await self.db.delete(result)
+        await self.log_action(current_user.username, "Deleted user", result.username, self.db)
+        return {"message": f"User {result.username} deleted successfully"}
+    
+    async def edit_user(self,user_id, data, current_user):
+        await self.is_admin(current_user)
+        query = await self.db.execute(select(User).where(User.id == user_id))
+        result = query.scalars().first()
+
+        if not result:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        if data.username:
+            result.username = data.username
+        if data.role_id:
+            result.role_id = data.role_id
+        if data.password:
+            result.password = get_password_hash(data.password)
+
+        await self.db.commit()
+        await self.log_action(current_user.username, "Edited user", result.username, self.db)
+        return {"message": f"User {result.username} edited successfully"}

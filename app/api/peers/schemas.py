@@ -3,7 +3,6 @@ from typing import Optional
 from pydantic import BaseModel
 
 class AddPeerRequest(BaseModel):
-    server_id: str
     ip: Optional[str] = None  # ✅ ip is now optional
     peer_name: str
     

@@ -19,19 +19,29 @@ async def user_login(data: UserLoginSchema, db: AsyncSession = Depends(get_sessi
     result = await user_service(db).user_login(data)
     return result
 
-
 @router.get("/admin-check")
 async def admin_check(db: AsyncSession = Depends(get_session),
                     current_user=Depends(get_current_user)):
     result = await user_service(db).admin_check(current_user)
     return result
 
-@router.get("",response_model=list[UserResponse])
+
+@router.get("")
 async def get_users(db: AsyncSession = Depends(get_session),
                     current_user=Depends(get_current_user)):
     result = await user_service(db).get_all_users(current_user)
     return result
 
+@router.get("/me")
+async def get_me(db : AsyncSession = Depends(get_session),current_user = Depends(get_current_user)):
+    result = await user_service(db).get_user(current_user)
+    return result
+
+@router.get("/{user_id}")
+async def get_user_by_id(user_id: str, db: AsyncSession = Depends(get_session),
+                         current_user=Depends(get_current_user)):
+    result = await user_service(db).get_user_by_id(user_id, current_user)
+    return result
 
 @router.post("")
 async def create_user(
@@ -42,10 +52,6 @@ async def create_user(
     result = await user_service(db).create_user(data, current_user)
     return result
 
-@router.get("/me")
-async def get_user(db : AsyncSession = Depends(get_session),current_user = Depends(get_current_user)):
-    result = await user_service(db).get_user(current_user)
-    return result
 
 @router.delete("/{user_id}")
 async def delete_user(user_id : str, db : AsyncSession = Depends(get_session),current_user = Depends(get_current_user)):

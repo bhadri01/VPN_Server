@@ -1,9 +1,11 @@
 
 
 from datetime import timedelta
+import re
 from unittest import result
 from fastapi import HTTPException
 from sqlalchemy import select
+from app.api.peers.models import WireGuardPeer
 from app.api.users.models import AuditLog, User
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -53,6 +55,7 @@ class user_service:
 
     async def admin_check(self,current_user):
         await self.is_admin(current_user)
+        return {"message": "User is an admin"}
 
 
     async def user_login(self, data):
@@ -66,7 +69,7 @@ class user_service:
 
         access_token = create_access_token(
             data={"username": user.username, "role": user.role_id}, expires_delta=timedelta(minutes=TOKEN_EXPIRE_MINUTES))
-        return {"access_token": access_token, "token_type": "bearer"}
+        return {"access_token": access_token, "token_type": "bearer", "user_id": user.id}
 
     async def create_user(self, data, current_user: User):
         """ Ensure only admins can create users without nested transactions """
@@ -90,27 +93,38 @@ class user_service:
         await self.log_action(current_user.username, "Created user", data.username, self.db)
         return {"message": f"User {data.username} created successfully"}
     
-    async def get_all_users(self,current_user):
+    async def get_all_users(self, current_user):
         await self.is_admin(current_user)
         query = await self.db.execute(select(User))
-        return query.scalars().all()
-
-    async def get_user_peers_count(self, username: str):
-        user = await self.authenticate_user(username, self.db)
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+        users = query.scalars().all()
+        if not users:
+            raise HTTPException(status_code=404, detail="No users found")
         
-        # Assuming there is a relationship defined in the User model to get peers
-        peers_count = len(user.peers)  # Replace 'peers' with the actual relationship attribute
-        return {"username": username, "peers_count": peers_count}
-
+        for user in users:
+            peer_count_query = await self.db.execute(select(WireGuardPeer).where(WireGuardPeer.user_id == user.id))
+            peer_count = len(peer_count_query.scalars().all())
+            user.peer_count = peer_count
+        
+        return users
+        
     async def get_user(self, current_user):
+        print("Username",current_user.username)
         query = await self.db.execute(select(User).where(User.username == current_user.username))
+        result = query.scalars().first()
+        return result
+        
+    async def get_user_by_id(self, user_id, current_user):
+        await self.is_admin(current_user)
+        query = await self.db.execute(select(User).where(User.id == user_id))
         result = query.scalars().first()
         if not result:
             raise HTTPException(status_code=404, detail="User not found")
+        # Calculate peer count for the user
+        peer_count_query = await self.db.execute(select(WireGuardPeer).where(WireGuardPeer.user_id == result.id))
+        peer_count = len(peer_count_query.scalars().all())
+        result.peer_count = peer_count
         return result
-    
+
     async def delete_user(self,user_id, current_user):
         await self.is_admin(current_user)
         query = await self.db.execute(select(User).where(User.id == user_id))

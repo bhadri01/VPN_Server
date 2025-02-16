@@ -1,6 +1,7 @@
 from unittest import result
 from fastapi import APIRouter, Depends
 
+from app.api.peers.services import peer_service
 from app.api.users.models import User
 from app.api.users.schemas import CreateUserRequest, UserLoginSchema, UserResponse
 from app.api.users.services import user_service
@@ -19,10 +20,16 @@ async def user_login(data: UserLoginSchema, db: AsyncSession = Depends(get_sessi
     return result
 
 
+@router.get("/admin-check")
+async def admin_check(db: AsyncSession = Depends(get_session),
+                    current_user=Depends(get_current_user)):
+    result = await user_service(db).admin_check(current_user)
+    return result
+
 @router.get("",response_model=list[UserResponse])
 async def get_users(db: AsyncSession = Depends(get_session),
                     current_user=Depends(get_current_user)):
-    result = await user_service(db).get_all_users()
+    result = await user_service(db).get_all_users(current_user)
     return result
 
 
@@ -39,4 +46,6 @@ async def create_user(
 async def get_user(db : AsyncSession = Depends(get_session),current_user = Depends(get_current_user)):
     result = await user_service(db).get_user(current_user)
     return result
+
+
 

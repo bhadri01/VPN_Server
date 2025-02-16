@@ -48,6 +48,11 @@ class user_service:
     async def authenticate_user(username: str, db: AsyncSession):
         result = await db.execute(select(User).filter_by(username=username))
         return result.scalar_one_or_none()
+    
+
+    async def admin_check(self,current_user):
+        await self.is_admin(current_user)
+
 
     async def user_login(self, data):
         result = await self.db.execute(
@@ -59,7 +64,7 @@ class user_service:
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
         access_token = create_access_token(
-            data={"username": user.username, "role": user.role}, expires_delta=timedelta(minutes=TOKEN_EXPIRE_MINUTES))
+            data={"username": user.username, "role": user.role_id}, expires_delta=timedelta(minutes=TOKEN_EXPIRE_MINUTES))
         return {"access_token": access_token, "token_type": "bearer"}
 
     async def create_user(self, data, current_user: User):
@@ -67,24 +72,24 @@ class user_service:
 
         await self.is_admin(current_user)  # ✅ Properly await the function
 
-        return {"message":"Passed"}
-        # Check if user already exists (use `await self.db.execute()`)
-        # result = await self.db.execute(select(User).where(User.username == data.username))
-        # existing_user = result.scalars().first()
-        # if existing_user:
-        #     raise HTTPException(status_code=400, detail="User already exists")
-        # # Hash the password (ensure it's sync-safe)
-        # hashed_password = get_password_hash(data.password)
-        # # Create a new user
-        # new_user = User(username=data.username,
-        #                 password=hashed_password, role=data.role)
-        # self.db.add(new_user)
+        #Check if user already exists (use `await self.db.execute()`)
+        result = await self.db.execute(select(User).where(User.username == data.username))
+        existing_user = result.scalars().first()
+        if existing_user:
+            raise HTTPException(status_code=400, detail="User already exists")
+        # Hash the password (ensure it's sync-safe)
+        hashed_password = get_password_hash(data.password)
+        # Create a new user
+        new_user = User(username=data.username,
+                        password=hashed_password, role_id=data.role_id)
+        self.db.add(new_user)
         
-        # # Logging action AFTER commit to prevent nested transactions
-        # await self.log_action(current_user.username, "Created user", data.username, self.db)
-        # return {"message": f"User {data.username} created successfully"}
+        # Logging action AFTER commit to prevent nested transactions
+        await self.log_action(current_user.username, "Created user", data.username, self.db)
+        return {"message": f"User {data.username} created successfully"}
     
-    async def get_all_users(self):
+    async def get_all_users(self,current_user):
+        await self.is_admin(current_user)
         query = await self.db.execute(select(User))
         return query.scalars().all()
 
@@ -103,3 +108,7 @@ class user_service:
         if not result:
             raise HTTPException(status_code=404, detail="User not found")
         return result
+    
+    # async def delete_user(self,current_user):
+    #     await self.is_admin(current_user)
+    #     query = await self.db.execute(select(User).where(User.username == current_user))

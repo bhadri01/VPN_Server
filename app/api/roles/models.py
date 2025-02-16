@@ -32,3 +32,4 @@ async def create_default_roles():
             )
             await session.commit()  # ✅ Commit immediately
         break  # ✅ Exit after processing
+

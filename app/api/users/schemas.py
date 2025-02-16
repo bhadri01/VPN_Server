@@ -15,12 +15,12 @@ class UserLoginSchema(BaseModel):
 class CreateUserRequest(BaseModel):
     username: str
     password : str
-    role: str
+    role_id: str
 
 class UserResponse(BaseModel):
     id: str
     username: str
-    role: str
+    role_id: str
     created_at: datetime.datetime
     updated_at: datetime.datetime
     created_by: Optional[str]

@@ -19,7 +19,7 @@ async def get_current_user(
 
     token = credentials.credentials
     try:
-        payload = decode_token(token)
+        payload = decode_token(token)  # ✅ Ensure `decode_token` correctly extracts the payload
     except ExpiredSignatureError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has expired")
     except jwt.JWTError:
@@ -29,9 +29,11 @@ async def get_current_user(
     if username is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
-    query = await db.execute(select(User).where(User.username == username))
-    user = query.scalars().first()
-    if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    async for session in get_session():  # ✅ Use an async context for session
+        query = await session.execute(select(User).where(User.username == username))
+        user = query.scalars().first()
 
-    return user
+        if user is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+        return user  # ✅ Return user after successful validation

@@ -7,6 +7,7 @@ from sqlalchemy import select
 from app.api.users.models import AuditLog, User
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.database import get_session
 from app.utils.password_utils import get_password_hash, verify_password
 from app.utils.security import TOKEN_EXPIRE_MINUTES, create_access_token
 
@@ -23,11 +24,26 @@ class user_service:
         await db.commit()
 
     @staticmethod
-    def is_admin(user: User):
-        if user.role != "admin":
-            raise HTTPException(
-                status_code=403, detail="Admin access required")
+    async def is_admin(user: User):
+        if not hasattr(user, "role_id"):  # ✅ Ensure role_id exists in User model
+            raise HTTPException(status_code=500, detail="User model does not have role_id")
+
+        async for session in get_session():
+            from app.api.roles.models import Role, RoleEnum
             
+            # ✅ Fetch the Role ID for "admin"
+            admin_role = await session.execute(select(Role.id).where(Role.role == RoleEnum.admin.value))
+            admin_role_id = admin_role.scalar_one_or_none()
+
+            if not admin_role_id:
+                raise HTTPException(status_code=500, detail="Admin role not found in database")
+
+            # ✅ Compare user's role ID with the admin role ID
+            if user.role_id != admin_role_id:
+                raise HTTPException(status_code=403, detail="Admin access required")
+
+            break  # ✅ Exit after checking
+                    
     @staticmethod
     async def authenticate_user(username: str, db: AsyncSession):
         result = await db.execute(select(User).filter_by(username=username))
@@ -49,22 +65,24 @@ class user_service:
     async def create_user(self, data, current_user: User):
         """ Ensure only admins can create users without nested transactions """
 
-        self.is_admin(current_user)  # Ensure only admins can create users
+        await self.is_admin(current_user)  # ✅ Properly await the function
+
+        return {"message":"Passed"}
         # Check if user already exists (use `await self.db.execute()`)
-        result = await self.db.execute(select(User).where(User.username == data.username))
-        existing_user = result.scalars().first()
-        if existing_user:
-            raise HTTPException(status_code=400, detail="User already exists")
-        # Hash the password (ensure it's sync-safe)
-        hashed_password = get_password_hash(data.password)
-        # Create a new user
-        new_user = User(username=data.username,
-                        password=hashed_password, role=data.role)
-        self.db.add(new_user)
+        # result = await self.db.execute(select(User).where(User.username == data.username))
+        # existing_user = result.scalars().first()
+        # if existing_user:
+        #     raise HTTPException(status_code=400, detail="User already exists")
+        # # Hash the password (ensure it's sync-safe)
+        # hashed_password = get_password_hash(data.password)
+        # # Create a new user
+        # new_user = User(username=data.username,
+        #                 password=hashed_password, role=data.role)
+        # self.db.add(new_user)
         
-        # Logging action AFTER commit to prevent nested transactions
-        await self.log_action(current_user.username, "Created user", data.username, self.db)
-        return {"message": f"User {data.username} created successfully"}
+        # # Logging action AFTER commit to prevent nested transactions
+        # await self.log_action(current_user.username, "Created user", data.username, self.db)
+        # return {"message": f"User {data.username} created successfully"}
     
     async def get_all_users(self):
         query = await self.db.execute(select(User))

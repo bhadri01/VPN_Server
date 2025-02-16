@@ -1,3 +1,5 @@
+import os
+from app.api.users.models import create_default_user
 from app.api.wg_server.routers import router as wg_router
 from app.api.peers.routers import router as peer_router
 from app.api.users.routers import router as user_router
@@ -16,7 +18,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 # route import
 from app.core.config import settings
-from app.core.database import Base, master_db_engine
+from app.core.database import Base, get_session, master_db_engine
 from app.logs.logging import logger
 # import expection handlers
 from app.utils.exception_handler import (authentication_error_handler,
@@ -88,10 +90,20 @@ async def start_periodic_cleanup():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from app.api.roles.models import create_default_roles
+    from app.utils.ip_pool import populate_ip_pool
     async with master_db_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         logger.info('[*] FastAPI startup: Database connected')
 
+    await create_default_roles()
+    await create_default_user()
+
+
+    async for session in get_session():  # ✅ Properly retrieve session
+        await populate_ip_pool(session, str(os.getenv("ALLOWED_IPS")))
+        break  # ✅ Ensure only one session is used  
+      
     loop = asyncio.get_event_loop()
     loop.create_task(start_periodic_cleanup())
     logger.info('[*] FastAPI startup: Token thread started')

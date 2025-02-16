@@ -1,14 +1,14 @@
 from datetime import datetime
-from sqlalchemy import TIMESTAMP, Column, Integer, String,event, select
+from sqlalchemy import TIMESTAMP, Column, ForeignKey, Insert, Integer, String,event, insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.database import Base,master_db_engine
+from app.core.database import Base, get_session,master_db_engine
 from app.utils.password_utils import get_password_hash
 from sqlalchemy.orm import relationship
 
 class User(Base):
     __tablename__ = "users"
     username = Column(String, unique=True, index=True)
-    role = Column(String, default="user")
+    role_id = Column(String,ForeignKey("role.id"),nullable=False)
     password = Column(String,nullable=False)
     
 
@@ -21,15 +21,40 @@ class AuditLog(Base):
     timestamp = Column(TIMESTAMP, default=datetime.utcnow)
     
 
-def create_default_user(target, connection, **kwargs):
-    hashed_password = get_password_hash("admin@123")  # Default password
-    connection.execute(
-        User.__table__.insert().values(
-            username="admin",
-            role="admin",
-            password=hashed_password
-        )
-    )
+# def create_default_user(target, connection, **kwargs):
+#     hashed_password = get_password_hash("admin@123")  # Default password
+#     connection.execute(
+#         User.__table__.insert().values(
+#             username="admin",
+#             role="admin",
+#             password=hashed_password
+#         )
+#     )
 
-# Listen for table creation event
-event.listen(User.__table__, "after_create", create_default_user)
+# # Listen for table creation event
+# event.listen(User.__table__, "after_create", create_default_user)
+
+
+async def create_default_user():
+    async for session in get_session():
+        # Fetch the `admin` role ID
+        from app.api.roles.models import Role,RoleEnum
+        admin_role = await session.execute(select(Role.id).where(Role.role == RoleEnum.admin.value))
+        admin_role_id = admin_role.scalar_one_or_none()  # ✅ Fetch Role ID instead of Role name
+
+        if admin_role_id:
+            # Check if admin user exists
+            user_check = await session.execute(select(User.username).where(User.username == "admin"))
+            if not user_check.scalar_one_or_none():
+                hashed_password = get_password_hash("admin@123")
+
+                await session.execute(
+                    insert(User).values(
+                        username="admin",
+                        role_id=admin_role_id,  # ✅ Pass the correct Role ID
+                        password=hashed_password
+                    )
+                )
+                await session.commit()  # ✅ Commit after inserting user
+
+        break  # ✅ Exit loop

@@ -1,1 +1,1 @@
-from app.api.users.models import *
+from app.api import *

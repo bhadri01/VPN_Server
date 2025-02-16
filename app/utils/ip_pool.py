@@ -1,6 +1,6 @@
 from app.logs.logging import logger
 from fastapi import HTTPException
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from ipaddress import IPv4Network
 
@@ -9,6 +9,14 @@ from ipaddress import IPv4Network
 async def populate_ip_pool(db: AsyncSession, subnet: str):
     from app.api.peers.models import WireGuardIPPool
     """Populate the database with all available IPs from the subnet."""
+
+    # Check if the table already contains the values matching the subnet length
+    existing_ips_count = await db.scalar(select(func.count()).select_from(WireGuardIPPool))
+    subnet_ips_count = len(list(IPv4Network(subnet).hosts())) - 1  # Exclude the first IP
+
+    if existing_ips_count >= subnet_ips_count:
+        logger.info("IP Pool already populated")
+        return
 
     # Exclude the first IP (e.g., 10.8.0.1) as it's usually the gateway
     ip_list = [str(ip) for ip in IPv4Network(subnet).hosts()][1:]

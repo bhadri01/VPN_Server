@@ -73,38 +73,36 @@ class peer_service:
         server = await self.db.execute(select(WGServerConfig))
         server = server.scalars().first()
 
-        new_peer = WireGuardPeer(
-            user_id=user_id,
-            peer_name=data.peer_name,
-            public_key=public_key,
-            private_key=private_key,
-            assigned_ip=assigned_ip,
-            server_id=server.id
-        )
+        return {"Interface Name": server.interface_name}
 
-        self.db.add(new_peer)
-        await self.db.commit()  # Ensure commit is awaited
+        # new_peer = WireGuardPeer(
+        #     user_id=user_id,
+        #     peer_name=data.peer_name,
+        #     public_key=public_key,
+        #     private_key=private_key,
+        #     assigned_ip=assigned_ip,
+        #     server_id=server.id
+        # )
 
-        # Fetch the WireGuard server config
-        query = await self.db.execute(select(WGServerConfig))
-        result = query.scalars().first()
 
-        if result is None:
-            raise HTTPException(
-                status_code=404, detail="WireGuard server config not found")
+        # if server is None:
+        #     raise HTTPException(
+        #         status_code=404, detail="WireGuard server config not found")
 
-        # Log action in the database
-        command = f"wg set {result.interface_name} peer {public_key} allowed-ips {assigned_ip}/32"
-        process = await asyncio.create_subprocess_shell(command)
-        await process.communicate()  # Ensure command execution completes
+        # # Log action in the database
+        # command = f"wg set {server.interface_name} peer {public_key} allowed-ips {assigned_ip}/32"
+        # process = await asyncio.create_subprocess_shell(command)
+        # await process.communicate()  # Ensure command execution completes
 
-        command = f"wg-quick save {result.interface_name}"
-        process = await asyncio.create_subprocess_shell(command)
-        await process.communicate()
+        # command = f"wg-quick save {server.interface_name}"
+        # process = await asyncio.create_subprocess_shell(command)
+        # await process.communicate()
 
-        await self.log_action(current_user.username, "Added peer", data.peer_name, self.db)
+        # self.db.add(new_peer)
+        # await self.db.commit()  # Ensure commit is awaited
+        # await self.log_action(current_user.username, "Added peer", data.peer_name, self.db)
 
-        return {"message": "Peer Created Successfully"}
+        # return {"message": "Peer Created Successfully"}
 
     async def remove_peer(self, peer_id, current_user):
         peer = await self.db.execute(select(WireGuardPeer).where(WireGuardPeer.id == peer_id))
@@ -129,7 +127,8 @@ class peer_service:
         return {"message": f"Peer {result.peer_name} removed successfully"}
 
     async def update_peer(self, peer_id, data, current_user):
-        peer = await self.db.execute(select(WireGuardPeer).where(WireGuardPeer.id == peer_id))
+        private_key, public_key = self.generate_wg_key_pair()
+        peer = await self.db.execute(select(WireGuardPeer).where(WireGuardPeer.id == peer_id).options(joinedload(WireGuardPeer.wg_server)))
         result = peer.scalars().first()
         if result is None:
             raise HTTPException(
@@ -140,6 +139,20 @@ class peer_service:
             result.peer_name = data.peer_name
         if data.ip:
             result.assigned_ip = data.ip
+
+        command = f"wg set {result.wg_server.interface_name} peer {result.public_key} remove"
+        process = await asyncio.create_subprocess_shell(command)
+        await process.communicate()  # Ensure command execution completes
+
+        # Log action in the database
+        command = f"wg set {result.wg_server.interface_name} peer {public_key} allowed-ips {data.ip}/32"
+        process = await asyncio.create_subprocess_shell(command)
+        await process.communicate()  # Ensure command execution completes
+
+        command = f"wg-quick save {result.wg_server.interface_name}"
+        process = await asyncio.create_subprocess_shell(command)
+        await process.communicate()  # Ensure command execution completes
+
         await self.db.commit()
         await self.log_action(current_user.username, "Updated peer", result.peer_name, self.db)
 

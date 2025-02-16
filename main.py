@@ -97,8 +97,10 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
         logger.info('[*] FastAPI startup: Database connected')
 
-    await create_default_roles()
+    # await create_default_roles()
     await create_default_user()
+    async for session in get_session():
+        await populate_ip_pool(session, os.getenv("ALLOWED_IPS"))
 
 
     loop = asyncio.get_event_loop()

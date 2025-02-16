@@ -8,7 +8,7 @@ from sqlalchemy.orm import relationship
 class User(Base):
     __tablename__ = "users"
     username = Column(String, unique=True, index=True)
-    role_id = Column(String,ForeignKey("role.id"),nullable=False)
+    role_id = Column(String,ForeignKey("roles.id"),nullable=False)
     password = Column(String,nullable=False)
     
 
@@ -37,24 +37,35 @@ class AuditLog(Base):
 
 async def create_default_user():
     async for session in get_session():
-        # Fetch the `admin` role ID
-        from app.api.roles.models import Role,RoleEnum
+        from app.api.roles.models import Role, RoleEnum
+        from app.api.peers.models import WireGuardIPPool
+
+        # Check if roles exist
+        result = await session.execute(select(Role.role).where(Role.role == RoleEnum.admin.value))
+        if not result.scalar_one_or_none():  # If no roles exist, insert them
+            await session.execute(
+                insert(Role),
+                [
+                    {"role": RoleEnum.admin.value},
+                    {"role": RoleEnum.user.value},
+                    {"role": RoleEnum.maintainer.value},
+                ],
+            )
+            await session.commit()  # ✅ Commit immediately
+
         admin_role = await session.execute(select(Role.id).where(Role.role == RoleEnum.admin.value))
-        admin_role_id = admin_role.scalar_one_or_none()  # ✅ Fetch Role ID instead of Role name
+        admin_role_id = admin_role.scalar_one_or_none()
 
         if admin_role_id:
-            # Check if admin user exists
             user_check = await session.execute(select(User.username).where(User.username == "admin"))
             if not user_check.scalar_one_or_none():
                 hashed_password = get_password_hash("admin@123")
-
                 await session.execute(
                     insert(User).values(
                         username="admin",
-                        role_id=admin_role_id,  # ✅ Pass the correct Role ID
+                        role_id=admin_role_id,
                         password=hashed_password
                     )
                 )
-                await session.commit()  # ✅ Commit after inserting user
-
-        break  # ✅ Exit loop
+                await session.commit()
+        break

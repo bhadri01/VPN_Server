@@ -24,7 +24,7 @@ class WireGuardPeer(Base):
 class WireGuardIPPool(Base):
     __tablename__ = "wireguard_ip_pool"
 
-    ip_address = Column(String, primary_key=True, index=True)
+    ip_address = Column(String, index=True)
     is_assigned = Column(Boolean, default=False)
 
 
@@ -39,17 +39,14 @@ async def async_populate_ip_pool(subnet: str):
 def after_create(target, connection, **kw):
     """Run `populate_ip_pool()` after `wireguard_ip_pool` is created."""
     subnet = os.getenv("ALLOWED_IPS")
-
     if not subnet:
         raise ValueError("ALLOWED_IPS environment variable is not set")
-
     loop = asyncio.get_event_loop()
-
     if loop.is_running():
         asyncio.create_task(async_populate_ip_pool(subnet))  # ✅ Non-blocking execution
     else:
         loop.run_until_complete(async_populate_ip_pool(subnet))  # ✅ Ensure execution
 
 
-# ✅ Register the event listener to populate IP pool after table creation
+# Register the event listener to populate IP pool after table creation
 event.listen(WireGuardIPPool.__table__, "after_create", after_create)

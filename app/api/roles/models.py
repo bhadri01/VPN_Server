@@ -11,7 +11,7 @@ class RoleEnum(Enum):
 
 
 class Role(Base):
-    __tablename__ = "role"
+    __tablename__ = "roles"
     role = Column(String, unique=True)  # Use primary key to ensure uniqueness
     
 

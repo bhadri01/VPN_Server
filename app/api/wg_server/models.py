@@ -4,6 +4,7 @@ import os
 import subprocess
 from typing import Tuple
 from sqlalchemy import CheckConstraint, Column, ForeignKey, Integer, String, event
+from app.core.config import settings
 from app.core.database import Base
 from sqlalchemy.orm import relationship
 from app.logs.logging import logger
@@ -48,12 +49,13 @@ private_key, public_key = generate_wg_key_pair()
 
 def create_default_server(target, connection, **kwargs):
     # Extract required parameters from kwargs
-    server_name = kwargs.get("server_name", "wg-server-default")
-    address = kwargs.get("address", "10.0.0.1/16")
+    server_name = kwargs.get("server_name", f"{settings.servername}")
+    interface_name = kwargs.get("interface_name", f"{interface_name}")
+    address = kwargs.get("address", f"{address}")
     listen_port = kwargs.get("listen_port", 51820)
     private_key = kwargs.get("private_key", "")
     public_key = kwargs.get("public_key", "")
-    wg0_conf_path = "/etc/wireguard/wg1.conf"  # Make sure this path is correct
+    wg0_conf_path = f"/etc/wireguard/wg1.conf"  # Make sure this path is correct
 
     if not private_key or not public_key:
         raise ValueError("Private key and public key must be provided.")
@@ -76,7 +78,7 @@ def create_default_server(target, connection, **kwargs):
     connection.execute(
         WGServerConfig.__table__.insert().values(
             server_name=server_name,
-            interface_name="wg1",
+            interface_name=interface_name,
             address=address,
             listen_port=listen_port,
             private_key=private_key,

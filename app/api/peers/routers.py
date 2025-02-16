@@ -26,7 +26,8 @@ async def get_single_peer(peer_id: str, db: AsyncSession = Depends(get_session))
 
 @router.post("/{user_id}")
 async def add_peers(user_id: str, data: AddPeerRequest, current_user=Depends(get_current_user), db: AsyncSession = Depends(get_session)):
-    return await peer_service(db).add_peer(user_id, data, current_user)
+    result = await peer_service(db).add_peer(user_id, data, current_user)
+    return result
 
 
 @router.delete("/{peer_id}")

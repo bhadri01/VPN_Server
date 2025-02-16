@@ -17,19 +17,20 @@ async def populate_ip_pool(db: AsyncSession, subnet: str):
     if existing_ips_count >= subnet_ips_count:
         logger.info("IP Pool already populated")
         return
+    else:
 
-    # Exclude the first IP (e.g., 10.8.0.1) as it's usually the gateway
-    ip_list = [str(ip) for ip in IPv4Network(subnet).hosts()][1:]
+        # Exclude the first IP (e.g., 10.8.0.1) as it's usually the gateway
+        ip_list = [str(ip) for ip in IPv4Network(subnet).hosts()][1:]
 
-    # Insert into database if not already populated
-    for ip in ip_list:
-        result = await db.execute(select(WireGuardIPPool).where(WireGuardIPPool.ip_address == ip))
-        if not result.scalars().first():
-            db.add(WireGuardIPPool(ip_address=ip, is_assigned=False))
+        # Insert into database if not already populated
+        for ip in ip_list:
+            result = await db.execute(select(WireGuardIPPool).where(WireGuardIPPool.ip_address == ip))
+            if not result.scalars().first():
+                db.add(WireGuardIPPool(ip_address=ip, is_assigned=False))
 
-    logger.info("IP Pool populated")
+        logger.info("IP Pool populated")
 
-    await db.commit()
+        await db.commit()
 
 
 async def get_next_available_ip(db: AsyncSession, ip: str = None) -> str:

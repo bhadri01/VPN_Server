@@ -12,6 +12,12 @@ class Settings(BaseSettings):
 
     environment: str
 
+    # server_ip: str
+    # allowed_ips : str
+    # server_port : str
+    # endpoint : str
+
+
     class Config:
         env_file = ".env"
 

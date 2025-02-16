@@ -100,7 +100,8 @@ async def lifespan(app: FastAPI):
     # await create_default_roles()
     await create_default_user()
     async for session in get_session():
-        await populate_ip_pool(session, os.getenv("ALLOWED_IPS"))
+        print(os.getenv("ALLOWED_IPS"))
+        await populate_ip_pool(session, str(os.getenv("ALLOWED_IPS")))
 
 
     loop = asyncio.get_event_loop()

@@ -48,5 +48,5 @@ def after_create(target, connection, **kw):
         loop.run_until_complete(async_populate_ip_pool(subnet))  # ✅ Ensure execution
 
 
-# Register the event listener to populate IP pool after table creation
-event.listen(WireGuardIPPool.__table__, "after_create", after_create)
+# # Register the event listener to populate IP pool after table creation
+# event.listen(WireGuardIPPool.__table__, "after_create", after_create)

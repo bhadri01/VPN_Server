@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from websockets import serve
 from sqlalchemy.orm import joinedload
 
-from app.api.peers.models import WireGuardPeer
+from app.api.peers.models import WireGuardIPPool, WireGuardPeer
 from app.api.users.models import AuditLog
 from app.api.wg_server.models import WGServerConfig
 from app.utils.ip_pool import get_next_available_ip
@@ -73,39 +73,42 @@ class peer_service:
         server = await self.db.execute(select(WGServerConfig))
         server = server.scalars().first()
 
-        return {"Interface Name": server.interface_name}
+        if server is None:
+            raise HTTPException(status_code=404, detail="WireGuard server config not found")
+        
+        print(server.interface_name)
 
-        # new_peer = WireGuardPeer(
-        #     user_id=user_id,
-        #     peer_name=data.peer_name,
-        #     public_key=public_key,
-        #     private_key=private_key,
-        #     assigned_ip=assigned_ip,
-        #     server_id=server.id
-        # )
+        new_peer = WireGuardPeer(
+            user_id=user_id,
+            peer_name=data.peer_name,
+            public_key=public_key,
+            private_key=private_key,
+            assigned_ip=assigned_ip,
+            server_id=server.id
+        )
 
 
-        # if server is None:
-        #     raise HTTPException(
-        #         status_code=404, detail="WireGuard server config not found")
+        if server is None:
+            raise HTTPException(
+                status_code=404, detail="WireGuard server config not found")
 
-        # # Log action in the database
-        # command = f"wg set {server.interface_name} peer {public_key} allowed-ips {assigned_ip}/32"
-        # process = await asyncio.create_subprocess_shell(command)
-        # await process.communicate()  # Ensure command execution completes
+        # Log action in the database
+        command = f"wg set {server.interface_name} peer {public_key} allowed-ips {assigned_ip}/32"
+        process = await asyncio.create_subprocess_shell(command)
+        await process.communicate()  # Ensure command execution completes
 
-        # command = f"wg-quick save {server.interface_name}"
-        # process = await asyncio.create_subprocess_shell(command)
-        # await process.communicate()
+        command = f"wg-quick save {server.interface_name}"
+        process = await asyncio.create_subprocess_shell(command)
+        await process.communicate()
 
-        # self.db.add(new_peer)
-        # await self.db.commit()  # Ensure commit is awaited
-        # await self.log_action(current_user.username, "Added peer", data.peer_name, self.db)
+        self.db.add(new_peer)
+        await self.db.commit()  # Ensure commit is awaited
+        await self.log_action(current_user.username, "Added peer", data.peer_name, self.db)
 
-        # return {"message": "Peer Created Successfully"}
+        return {"message": "Peer Created Successfully"}
 
     async def remove_peer(self, peer_id, current_user):
-        peer = await self.db.execute(select(WireGuardPeer).where(WireGuardPeer.id == peer_id))
+        peer = await self.db.execute(select(WireGuardPeer).where(WireGuardPeer.id == peer_id).options(joinedload(WireGuardPeer.wg_server)))
         result = peer.scalars().first()
 
         if result == None:
@@ -114,13 +117,23 @@ class peer_service:
                 status_code=404
             )
 
-        command = f"wg set wg0 peer {result.public_key} remove"
+        command = f"wg set {result.wg_server.interface_name} peer {result.public_key} remove"
         process = await asyncio.create_subprocess_shell(command)
         await process.communicate()  # Ensure command execution completes
 
-        command = f"wg-quick save wg0"
+        command = f"wg-quick save {result.wg_server.interface_name}"
         process = await asyncio.create_subprocess_shell(command)
         await process.communicate()  # Ensure command execution completes
+
+        # Mark the assigned IP as available in the WireGuardIPPool table
+        ip_entry = await self.db.execute(
+            select(WireGuardIPPool).where(WireGuardIPPool.ip_address == result.assigned_ip)
+        )
+        ip_result = ip_entry.scalars().first()
+
+        if ip_result:
+            ip_result.is_assigned = False
+            self.db.add(ip_result)  # Mark as available
 
         await self.db.delete(result)
         await self.log_action(current_user.username, "Removed peer", result.peer_name, self.db)
@@ -152,6 +165,16 @@ class peer_service:
         command = f"wg-quick save {result.wg_server.interface_name}"
         process = await asyncio.create_subprocess_shell(command)
         await process.communicate()  # Ensure command execution completes
+
+                # Mark the assigned IP as available in the WireGuardIPPool table
+        ip_entry = await self.db.execute(
+            select(WireGuardIPPool).where(WireGuardIPPool.ip_address == result.assigned_ip)
+        )
+        ip_result = ip_entry.scalars().first()
+
+        if ip_result:
+            ip_result.is_assigned = False
+            self.db.add(ip_result)  # Mark as available
 
         await self.db.commit()
         await self.log_action(current_user.username, "Updated peer", result.peer_name, self.db)

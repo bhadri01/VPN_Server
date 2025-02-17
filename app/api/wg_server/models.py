@@ -50,8 +50,8 @@ private_key, public_key = generate_wg_key_pair()
 def create_default_server(target, connection, **kwargs):
     # Extract required parameters from kwargs
     server_name = kwargs.get("server_name", f"{settings.servername}")
-    interface_name = kwargs.get("interface_name", f"{interface_name}")
-    address = kwargs.get("address", f"{address}")
+    interface_name = kwargs.get("interface_name", f"{settings.interface_name}")
+    address = kwargs.get("address", f"{settings.address}")
     listen_port = kwargs.get("listen_port", 51820)
     private_key = kwargs.get("private_key", "")
     public_key = kwargs.get("public_key", "")

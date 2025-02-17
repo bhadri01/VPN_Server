@@ -12,6 +12,9 @@ class Settings(BaseSettings):
 
     environment: str
 
+    servername: str
+    interface_name : str
+    address : str
     # server_ip: str
     # allowed_ips : str
     # server_port : str

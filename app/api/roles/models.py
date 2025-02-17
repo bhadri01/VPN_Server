@@ -2,6 +2,7 @@ from sqlalchemy import Column, String, event, insert, select
 from app.core.database import Base, get_session
 from enum import Enum
 from app.utils.password_utils import get_password_hash
+from sqlalchemy.orm import relationship
 
 
 class RoleEnum(Enum):
@@ -13,6 +14,9 @@ class RoleEnum(Enum):
 class Role(Base):
     __tablename__ = "roles"
     role = Column(String, unique=True)  # Use primary key to ensure uniqueness
+
+    # Define relationship with User model
+    users = relationship("User", back_populates="role")
     
 
 

@@ -1,22 +1,22 @@
 import asyncio
 from ipaddress import IPv4Network
 import os
+import re
 import stat
 import subprocess
 from typing import Tuple
 import aiofiles
 from fastapi import HTTPException
 from httpx import get
-from sqlalchemy import Select, select
+from sqlalchemy import  select
 from sqlalchemy.ext.asyncio import AsyncSession
-from websockets import serve
 from sqlalchemy.orm import joinedload
 
 from app.api.peers.models import WireGuardIPPool, WireGuardPeer
 from app.api.users.models import AuditLog
 from app.api.wg_server.models import WGServerConfig
 from app.utils.ip_pool import get_next_available_ip
-
+from app.core.config import settings
 
 
 
@@ -183,19 +183,21 @@ class peer_service:
 
     async def generate_peer_config(self, peer_id, current_user):
         query = await self.db.execute(select(WireGuardPeer).where(WireGuardPeer.id == peer_id).options(joinedload(WireGuardPeer.wg_server)))
-        result = query.scalars().first()
-        if not result:
+        peer = query.scalars().first()
+        if not peer:
             raise HTTPException(status_code=404, detail="Peer not found")
+        
+        peer_subnet = re.search(r"/(\d+)", peer.wg_server.server_ips).group(1)
 
         config = f"""
 [Interface]
-PrivateKey = {result.private_key}
-Address = {result.assigned_ip}/24
+PrivateKey = {peer.private_key}
+Address = {peer.assigned_ip}/{peer_subnet}
 
 [Peer]
-PublicKey = {result.wg_server.public_key}
-Endpoint = {os.getenv("ENDPOINT")}:{os.getenv("SERVER_PORT")}
-AllowedIPs = {os.getenv("ALLOWED_IPS")}
+PublicKey = {peer.wg_server.public_key}
+Endpoint = {settings.endpoint}
+AllowedIPs = {settings.allowed_ips}
 PersistentKeepalive = 30
 """
         # CONFIG_DIR = "/home"  # Define your config directory path

@@ -33,10 +33,12 @@ class WGServerConfig(Base):
     entry = Column(Integer, default=1, nullable=False, unique=True)
     server_name = Column(String(100), unique=True, nullable=False)
     interface_name = Column(String(100), unique=True, nullable=False)
-    address = Column(String(100), unique=True, nullable=False)
+    server_ips = Column(String(100), unique=True, nullable=False)
+    allowed_ips = Column(String(100),unique=True,nullable=False)
     listen_port = Column(Integer, unique=True, nullable=False)
     private_key = Column(String(100), unique=True, nullable=False)
     public_key = Column(String(100), unique=True, nullable=False)
+    
     peers = relationship("WireGuardPeer", back_populates="wg_server")
 
     __table_args__ = (
@@ -51,19 +53,20 @@ def create_default_server(target, connection, **kwargs):
     # Extract required parameters from kwargs
     server_name = kwargs.get("server_name", f"{settings.servername}")
     interface_name = kwargs.get("interface_name", f"{settings.interface_name}")
-    address = kwargs.get("address", f"{settings.address}")
-    listen_port = kwargs.get("listen_port", 51820)
+    server_ips = settings.server_ips
+    allowed_ips = settings.allowed_ips
+    listen_port = int(settings.listen_port)  # Convert to an integer
     private_key = kwargs.get("private_key", "")
     public_key = kwargs.get("public_key", "")
-    wg0_conf_path = f"/etc/wireguard/wg1.conf"  # Make sure this path is correct
+    wg0_conf_path = f"/etc/wireguard/{settings.interface_name}.conf"  # Make sure this path is correct
 
     if not private_key or not public_key:
         raise ValueError("Private key and public key must be provided.")
 
     # Append configuration to WireGuard config file
-    with open(wg0_conf_path, "a") as wg0_conf:
+    with open(wg0_conf_path, "w") as wg0_conf:
         wg0_conf.write(
-            f"\n[Interface]\nAddress = {address}\nSaveConfig = True\n"
+            f"\n[Interface]\nAddress = {server_ips}\nSaveConfig = True\n"
             f"PostUp = iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; "
             f"iptables -t nat -A POSTROUTING -o eth+ -j MASQUERADE\n"
             f"PostDown = iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; "
@@ -72,14 +75,15 @@ def create_default_server(target, connection, **kwargs):
         )
 
     # Start the WireGuard server
-    os.system(f"wg-quick up {server_name}")
+    os.system(f"wg-quick up {interface_name}")
 
     # Store configuration in the database
     connection.execute(
         WGServerConfig.__table__.insert().values(
             server_name=server_name,
             interface_name=interface_name,
-            address=address,
+            server_ips=server_ips,
+            allowed_ips=allowed_ips,
             listen_port=listen_port,
             private_key=private_key,
             public_key=public_key
@@ -93,5 +97,5 @@ event.listen(
     WGServerConfig.__table__,
     "after_create",
     lambda target, connection, **kwargs: create_default_server(
-        target, connection, private_key=private_key, public_key=public_key,address="10.11.0.1/16")
+        target, connection, private_key=private_key, public_key=public_key)
 )

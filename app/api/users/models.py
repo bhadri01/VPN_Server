@@ -10,6 +10,8 @@ class User(Base):
     username = Column(String, unique=True, index=True)
     role_id = Column(String,ForeignKey("roles.id"),nullable=False)
     password = Column(String,nullable=False)
+
+    role = relationship("Role", back_populates="users")
     
 
 class AuditLog(Base):

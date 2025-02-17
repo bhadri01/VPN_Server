@@ -13,7 +13,7 @@ from app.api.wg_server.models import WGServerConfig
 from app.core.database import get_session
 from app.utils.password_utils import get_password_hash, verify_password
 from app.utils.security import TOKEN_EXPIRE_MINUTES, create_access_token
-
+from sqlalchemy.orm import joinedload
 
 class user_service:
     def __init__(self, db: AsyncSession):
@@ -95,7 +95,7 @@ class user_service:
     
     async def get_all_users(self, current_user):
         await self.is_admin(current_user)
-        query = await self.db.execute(select(User))
+        query = await self.db.execute(select(User).options(joinedload(User.role)))
         users = query.scalars().all()
         if not users:
             raise HTTPException(status_code=404, detail="No users found")
@@ -109,7 +109,7 @@ class user_service:
         
     async def get_user(self, current_user):
         print("Username",current_user.username)
-        query = await self.db.execute(select(User).where(User.username == current_user.username))
+        query = await self.db.execute(select(User).where(User.username == current_user.username).options(joinedload(User.role)))
         result = query.scalars().first()
         return result
         

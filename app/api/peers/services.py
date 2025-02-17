@@ -73,11 +73,42 @@ class peer_service:
                 "updated_by": peer.updated_by,
                 "rx": transfer_data.get("rx", 0),
                 "tx": transfer_data.get("tx", 0),
-                "latest_handshake": transfer_data.get("latest_handshake", "Never")
+                "latest_handshake": transfer_data.get("latest_handshake", "Never"),
+                "endpoint": transfer_data.get("endpoint", "Unknown")
             }
             all_peers_data.append(peer_data)
 
         return all_peers_data
+    
+    async def get_all_peers_by_id(self, user_id):
+        # Fetch peers from the database for the current user
+        query = await self.db.execute(select(WireGuardPeer).where(WireGuardPeer.user_id == user_id))
+        peers = query.scalars().all()
+
+        all_peers_data = []
+        for peer in peers:
+            transfer_data = await self.get_peer_transfer_data(peer.id)
+            peer_data = {
+                "private_key": peer.private_key,
+                "user_id": peer.user_id,
+                "server_id": peer.server_id,
+                "created_at": peer.created_at,
+                "created_by": peer.created_by,
+                "peer_name": peer.peer_name,
+                "public_key": peer.public_key,
+                "assigned_ip": peer.assigned_ip,
+                "id": peer.id,
+                "updated_at": peer.updated_at,
+                "updated_by": peer.updated_by,
+                "rx": transfer_data.get("rx", 0),
+                "tx": transfer_data.get("tx", 0),
+                "latest_handshake": transfer_data.get("latest_handshake", "Never"),
+                "endpoint": transfer_data.get("endpoint", "Unknown")
+            }
+            all_peers_data.append(peer_data)
+
+        return all_peers_data
+
 
     async def get_peer(self, peer_id):
         """Fetch a specific peer by ID."""
@@ -265,6 +296,9 @@ PersistentKeepalive = 30
                 ["wg", "show", settings.interface_name, "transfer"], text=True)
             handshake_output = subprocess.check_output(
                 ["wg", "show", settings.interface_name, "latest-handshakes"], text=True)
+            endpoints_output = subprocess.check_output(
+                ["wg", "show", settings.interface_name, "endpoints"], text=True)
+
             for line in output.splitlines():
                 if public_key in line:
                     parts = line.split()
@@ -272,7 +306,7 @@ PersistentKeepalive = 30
                     tx = parts[2]
                     break
             else:
-                return None, None, None
+                return None, None, None, None
 
             for line in handshake_output.splitlines():
                 if public_key in line:
@@ -282,7 +316,15 @@ PersistentKeepalive = 30
             else:
                 latest_handshake = "Never"
 
-            return {"rx": rx, "tx": tx, "latest_handshake": latest_handshake}
+            for line in endpoints_output.splitlines():
+                if public_key in line:
+                    endpoint_parts = line.split()
+                    endpoint = endpoint_parts[1]
+                    break
+            else:
+                endpoint = "Unknown"
+
+            return {"rx": rx, "tx": tx, "latest_handshake": latest_handshake, "endpoint": endpoint}
 
         except subprocess.CalledProcessError as e:
             raise HTTPException(

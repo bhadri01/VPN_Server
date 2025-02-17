@@ -18,6 +18,11 @@ async def get_peers(db: AsyncSession = Depends(get_session), current_user=Depend
     result = await peer_service(db).get_all_peers(current_user)
     return result
 
+@router.get("/{user_id}")
+async def get_peers(user_id: str, db: AsyncSession = Depends(get_session), current_user=Depends(get_current_user)):
+    result = await peer_service(db).get_all_peers_by_id(user_id)
+    return result
+
 
 @router.get("/{peer_id}")
 async def get_single_peer(peer_id: str, db: AsyncSession = Depends(get_session), current_user=Depends(get_current_user)):

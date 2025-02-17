@@ -71,8 +71,8 @@ class peer_service:
                 "id": peer.id,
                 "updated_at": peer.updated_at,
                 "updated_by": peer.updated_by,
-                "rx": transfer_data.get("rx", 0),
-                "tx": transfer_data.get("tx", 0),
+                "rx": transfer_data.get("rx", str(0)),
+                "tx": transfer_data.get("tx", str(0)),
                 "latest_handshake": transfer_data.get("latest_handshake", "Never"),
                 "endpoint": transfer_data.get("endpoint", "Unknown")
             }
@@ -299,32 +299,33 @@ PersistentKeepalive = 30
             endpoints_output = subprocess.check_output(
                 ["wg", "show", settings.interface_name, "endpoints"], text=True)
 
+            rx, tx, latest_handshake, endpoint = 0, 0, "Never", "Unknown"
+
             for line in output.splitlines():
-                if public_key in line:
-                    parts = line.split()
-                    rx = parts[1]
-                    tx = parts[2]
+                parts = line.split()
+                if len(parts) >= 3 and parts[0] == public_key:
+                    rx = int(parts[1])  # ✅ Convert to integer
+                    tx = int(parts[2])  # ✅ Convert to integer
                     break
-            else:
-                return None, None, None, None
 
             for line in handshake_output.splitlines():
-                if public_key in line:
-                    handshake_parts = line.split()
-                    latest_handshake = handshake_parts[1]
+                parts = line.split()
+                if len(parts) >= 2 and parts[0] == public_key:
+                    latest_handshake = int(parts[1]) if parts[1].isdigit() else "Never"  # ✅ Convert to integer safely
                     break
-            else:
-                latest_handshake = "Never"
 
             for line in endpoints_output.splitlines():
-                if public_key in line:
-                    endpoint_parts = line.split()
-                    endpoint = endpoint_parts[1]
+                parts = line.split()
+                if len(parts) >= 2 and parts[0] == public_key:
+                    endpoint = parts[1]
                     break
-            else:
-                endpoint = "Unknown"
 
-            return {"rx": rx, "tx": tx, "latest_handshake": latest_handshake, "endpoint": endpoint}
+            return {  # ✅ Always return a dictionary
+                "rx": rx,
+                "tx": tx,
+                "latest_handshake": latest_handshake,
+                "endpoint": endpoint
+            }
 
         except subprocess.CalledProcessError as e:
             raise HTTPException(

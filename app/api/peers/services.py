@@ -4,11 +4,12 @@ import os
 import re
 import stat
 import subprocess
+import time
 from typing import Tuple
 import aiofiles
 from fastapi import HTTPException
 from httpx import get
-from sqlalchemy import  select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -17,7 +18,6 @@ from app.api.users.models import AuditLog
 from app.api.wg_server.models import WGServerConfig
 from app.utils.ip_pool import get_next_available_ip
 from app.core.config import settings
-
 
 
 class peer_service:
@@ -30,7 +30,6 @@ class peer_service:
                              action=action, target=target)
         db.add(log_entry)
         await db.commit()
-
 
     @staticmethod
     def generate_wg_key_pair() -> Tuple[str, str]:
@@ -51,11 +50,34 @@ class peer_service:
             # Handle subprocess errors (e.g., if WireGuard tools are missing)
             raise RuntimeError(
                 f"Error generating WireGuard keys: {e.stderr.decode().strip()}")
-        
-    async def get_all_peers(self, user_id):
-        query = await self.db.execute(select(WireGuardPeer).where(WireGuardPeer.user_id == user_id))
-        result = query.scalars().all()
-        return result
+
+    async def get_all_peers(self, current_user):
+        # Fetch peers from the database for the current user
+        query = await self.db.execute(select(WireGuardPeer).where(WireGuardPeer.user_id == current_user.id))
+        peers = query.scalars().all()
+
+        all_peers_data = []
+        for peer in peers:
+            transfer_data = await self.get_peer_transfer_data(peer.id)
+            peer_data = {
+                "private_key": peer.private_key,
+                "user_id": peer.user_id,
+                "server_id": peer.server_id,
+                "created_at": peer.created_at,
+                "created_by": peer.created_by,
+                "peer_name": peer.peer_name,
+                "public_key": peer.public_key,
+                "assigned_ip": peer.assigned_ip,
+                "id": peer.id,
+                "updated_at": peer.updated_at,
+                "updated_by": peer.updated_by,
+                "rx": transfer_data.get("rx", 0),
+                "tx": transfer_data.get("tx", 0),
+                "latest_handshake": transfer_data.get("latest_handshake", "Never")
+            }
+            all_peers_data.append(peer_data)
+
+        return all_peers_data
 
     async def get_peer(self, peer_id):
         """Fetch a specific peer by ID."""
@@ -63,19 +85,36 @@ class peer_service:
         peer = query.scalars().first()
         if not peer:
             raise HTTPException(status_code=404, detail="Peer not found")
-        return peer
+        transfer_data = await self.get_peer_transfer_data(peer.id)
+        peer_data = {
+            "private_key": peer.private_key,
+            "user_id": peer.user_id,
+            "server_id": peer.server_id,
+            "created_at": peer.created_at,
+            "created_by": peer.created_by,
+            "peer_name": peer.peer_name,
+            "public_key": peer.public_key,
+            "assigned_ip": peer.assigned_ip,
+            "id": peer.id,
+            "updated_at": peer.updated_at,
+            "updated_by": peer.updated_by,
+            "rx": transfer_data.get("rx", 0),
+            "tx": transfer_data.get("tx", 0),
+            "latest_handshake": transfer_data.get("latest_handshake", "Never")
+        }
+        return peer_data
 
     async def add_peer(self, user_id, data, current_user):
-        assigned_ip = await get_next_available_ip(self.db,data.ip)
+        assigned_ip = await get_next_available_ip(self.db, data.ip)
         private_key, public_key = self.generate_wg_key_pair()
-
 
         server = await self.db.execute(select(WGServerConfig))
         server = server.scalars().first()
 
         if server is None:
-            raise HTTPException(status_code=404, detail="WireGuard server config not found")
-        
+            raise HTTPException(
+                status_code=404, detail="WireGuard server config not found")
+
         print(server.interface_name)
 
         new_peer = WireGuardPeer(
@@ -86,7 +125,6 @@ class peer_service:
             assigned_ip=assigned_ip,
             server_id=server.id
         )
-
 
         if server is None:
             raise HTTPException(
@@ -127,7 +165,8 @@ class peer_service:
 
         # Mark the assigned IP as available in the WireGuardIPPool table
         ip_entry = await self.db.execute(
-            select(WireGuardIPPool).where(WireGuardIPPool.ip_address == result.assigned_ip)
+            select(WireGuardIPPool).where(
+                WireGuardIPPool.ip_address == result.assigned_ip)
         )
         ip_result = ip_entry.scalars().first()
 
@@ -157,6 +196,10 @@ class peer_service:
         process = await asyncio.create_subprocess_shell(command)
         await process.communicate()  # Ensure command execution completes
 
+        command = f"wg-quick save {result.wg_server.interface_name}"
+        process = await asyncio.create_subprocess_shell(command)
+        await process.communicate()  # Ensure command execution completes
+
         # Log action in the database
         command = f"wg set {result.wg_server.interface_name} peer {public_key} allowed-ips {data.ip}/32"
         process = await asyncio.create_subprocess_shell(command)
@@ -166,9 +209,10 @@ class peer_service:
         process = await asyncio.create_subprocess_shell(command)
         await process.communicate()  # Ensure command execution completes
 
-                # Mark the assigned IP as available in the WireGuardIPPool table
+        # Mark the assigned IP as available in the WireGuardIPPool table
         ip_entry = await self.db.execute(
-            select(WireGuardIPPool).where(WireGuardIPPool.ip_address == result.assigned_ip)
+            select(WireGuardIPPool).where(
+                WireGuardIPPool.ip_address == result.assigned_ip)
         )
         ip_result = ip_entry.scalars().first()
 
@@ -186,7 +230,7 @@ class peer_service:
         peer = query.scalars().first()
         if not peer:
             raise HTTPException(status_code=404, detail="Peer not found")
-        
+
         peer_subnet = re.search(r"/(\d+)", peer.wg_server.server_ips).group(1)
 
         config = f"""
@@ -207,3 +251,39 @@ PersistentKeepalive = 30
         #     await f.write(config)
 
         return config
+
+    async def get_peer_transfer_data(self, peer_id):
+        query = await self.db.execute(select(WireGuardPeer).where(WireGuardPeer.id == peer_id))
+        peer = query.scalars().first()
+        if not peer:
+            raise HTTPException(status_code=404, detail="Peer not found")
+
+        public_key = peer.public_key
+
+        try:
+            output = subprocess.check_output(
+                ["wg", "show", settings.interface_name, "transfer"], text=True)
+            handshake_output = subprocess.check_output(
+                ["wg", "show", settings.interface_name, "latest-handshakes"], text=True)
+            for line in output.splitlines():
+                if public_key in line:
+                    parts = line.split()
+                    rx = parts[1]
+                    tx = parts[2]
+                    break
+            else:
+                return None, None, None
+
+            for line in handshake_output.splitlines():
+                if public_key in line:
+                    handshake_parts = line.split()
+                    latest_handshake = handshake_parts[1]
+                    break
+            else:
+                latest_handshake = "Never"
+
+            return {"rx": rx, "tx": tx, "latest_handshake": latest_handshake}
+
+        except subprocess.CalledProcessError as e:
+            raise HTTPException(
+                status_code=500, detail="Error fetching transfer data")

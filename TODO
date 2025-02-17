@@ -16,3 +16,5 @@ show only logged in user's peers
 drop schema public cascade;
 
 create schema public;
+
+add wg save in peer update method

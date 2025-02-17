@@ -1,8 +1,9 @@
 
 
+from typing import List
 from fastapi import APIRouter, Depends
 
-from app.api.peers.schemas import AddPeerRequest, DeletePeer, EditPeer
+from app.api.peers.schemas import AddPeerRequest, DeletePeer, EditPeer, TransferData
 from .services import peer_service
 from app.core.database import get_session
 from app.utils.httpbearer import get_current_user
@@ -14,7 +15,7 @@ router = APIRouter()
 
 @router.get("")
 async def get_peers(db: AsyncSession = Depends(get_session), current_user=Depends(get_current_user)):
-    result = await peer_service(db).get_all_peers(current_user.id)
+    result = await peer_service(db).get_all_peers(current_user)
     return result
 
 
@@ -45,4 +46,9 @@ async def edit_peers(peer_id: str, data: EditPeer, current_user=Depends(get_curr
 @router.post("/generate-peer-config/{peer_id}")
 async def generate_peer_config(peer_id: str,  db: AsyncSession = Depends(get_session), current_user=Depends(get_current_user)):
     result = await peer_service(db).generate_peer_config(peer_id, current_user)
+    return result
+
+@router.get("/transfer-data/{peer_id}")
+async def get_transfer_data(peer_id: str, db: AsyncSession = Depends(get_session), current_user=Depends(get_current_user)):
+    result = await peer_service(db).get_peer_transfer_data(peer_id)
     return result
